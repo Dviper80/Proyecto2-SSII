@@ -178,7 +178,7 @@ def inicia_servidor():
      servidor.bind((HOST,PORT))
      servidor.listen(MAX_CONNECTIONS)
      print(f"[*] Servidor banco escuchando en {HOST}:{PORT}...")
-     contexto_tls = gestor_tls.obtener_contexto_servidor("server.crt", "server.key", "ca.crt")
+     contexto_tls = gestor_tls.obtener_contexto_servidor("server/server.crt", "server/server.key", "server/ca.crt")
 
      while True:
           con, addr = servidor.accept()
