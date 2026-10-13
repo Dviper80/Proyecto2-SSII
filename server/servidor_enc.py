@@ -18,7 +18,7 @@ registro_intentos = {}
 SESIONES = {}
 lock_sesiones = threading.Lock() # CORRECCIÓN: Faltaban los paréntesis ()
 
-MAX_CONNECTIONS = 1
+MAX_CONNECTIONS = 300
 semaforo = threading.Semaphore(MAX_CONNECTIONS)
 
 
@@ -176,7 +176,7 @@ def inicia_servidor():
      servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
      servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
      servidor.bind((HOST,PORT))
-     servidor.listen()
+     servidor.listen(MAX_CONNECTIONS)
      print(f"[*] Servidor banco escuchando en {HOST}:{PORT}...")
      contexto_tls = gestor_tls.obtener_contexto_servidor("server.crt", "server.key", "ca.crt")
 
@@ -202,7 +202,7 @@ def inicia_servidor():
                     con.sendall(seguridad.cifrar_peticion(resp_err))
                except Exception:
                     pass
-               con.close()
+               con_segura.close()
 
 if __name__ == '__main__':
      inicia_servidor()
