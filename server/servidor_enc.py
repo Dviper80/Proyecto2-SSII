@@ -251,7 +251,7 @@ def inicia_servidor():
               continue
 
           if semaforo.acquire(blocking=False):
-               hilo = threading.Thread(target=atiende_cliente, args=(con,addr))
+               hilo = threading.Thread(target=atiende_cliente, args=(con_segura,addr))
                hilo.daemon = True
                hilo.start()
           else:
