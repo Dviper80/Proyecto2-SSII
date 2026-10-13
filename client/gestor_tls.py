@@ -19,5 +19,5 @@ def obtener_contexto_cliente(ruta_cert, ruta_key, ruta_ca):
     # ESTAS DOS LÍNEAS EXIGEN Y VALIDAN EL CERTIFICADO DEL SERVIDOR
     contexto.verify_mode = ssl.CERT_REQUIRED
     contexto.load_verify_locations(cafile=ruta_ca)
-    contexto.check_hostname = False # Para pruebas en red local
+    contexto.check_hostname = False # Para pruebas en red local 
     return contexto

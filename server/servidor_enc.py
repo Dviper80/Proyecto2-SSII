@@ -97,11 +97,13 @@ def procesar_peticion(pet, huella_cert):
         try:
             
             nombre_base = f"cliente_{usuario}"
+            ruta_openssl = r"C:\Program Files\OpenSSL-Win64\bin\openssl.exe"
+
             # 1. Generar clave privada y CSR (Petición)
-            subprocess.run(["openssl", "req", "-newkey", "rsa:4096", "-keyout", f"{nombre_base}.key", "-out", f"{nombre_base}.csr", "-nodes", "-subj", f"/CN={usuario}"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            # 2. Firmar con la CA del servidor
-            subprocess.run(["openssl", "x509", "-req", "-in", f"{nombre_base}.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", f"{nombre_base}.crt", "-days", "365"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run([ruta_openssl, "req", "-newkey", "rsa:4096", "-keyout", f"{nombre_base}.key", "-out", f"{nombre_base}.csr", "-nodes", "-subj", f"/CN={usuario}"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
+            # 2. Firmar con la CA del servidor
+            subprocess.run([ruta_openssl, "x509", "-req", "-in", f"{nombre_base}.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", f"{nombre_base}.crt", "-days", "365"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)            
             # 3. Leer los archivos generados para enviarlos por el socket seguro
             with open(f"{nombre_base}.key", "r") as f:
                 clave_privada = f.read()

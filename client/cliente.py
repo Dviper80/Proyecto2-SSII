@@ -57,7 +57,7 @@ def inicia_cliente():
 
     try:
         # Nota: Asegúrate de que tu gestor_tls soporta recibir None en las rutas
-        contexto_tls = gestor_tls.obtener_contexto_cliente(ruta_cert, ruta_key, "ca.crt")
+        contexto_tls = gestor_tls.obtener_contexto_cliente(ruta_cert, ruta_key, "client/ca.crt")
         cliente_socket_base = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente_socket = contexto_tls.wrap_socket(cliente_socket_base, server_hostname=HOST)
         cliente_socket.connect((HOST,PORT))
