@@ -27,8 +27,8 @@ def enviar_peticion(sock, datos):
     paquete_cifrado = seguridad.cifrar_peticion(datos)
     sock.sendall(paquete_cifrado)
     
-    # 2. Recibir con un buffer mayor (4096) por el overhead de encriptación
-    respuesta_cifrada = sock.recv(4096)
+    # 2. Recibir con un buffer mayor por el overhead de encriptación
+    respuesta_cifrada = sock.recv(32768)
     if not respuesta_cifrada:
         return {}
         
@@ -95,7 +95,8 @@ def inicia_cliente():
                         sesion_activa = usuario
                         print(f"\n[+] Login exitoso. Saldo actual: {res['saldo']:.2f}€")
                     else:
-                        print(f"\n[-] {res['mensaje']}. Inténtalo de nuevo.")
+                        mensaje_err = res.get('mensaje', 'Error crítico: El servidor cerró la conexión inesperadamente')
+                        print(f"\n[-] {mensaje_err}. Inténtalo de nuevo.")
                 
                 elif opcion == '2':
                     if modo == '1':
