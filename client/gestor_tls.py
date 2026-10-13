@@ -13,7 +13,8 @@ def obtener_contexto_servidor(ruta_cert, ruta_key, ruta_ca):
 def obtener_contexto_cliente(ruta_cert, ruta_key, ruta_ca):
     contexto = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     contexto.minimum_version = ssl.TLSVersion.TLSv1_3
-    contexto.load_cert_chain(certfile=ruta_cert, keyfile=ruta_key)
+    if ruta_cert and ruta_key:
+        contexto.load_cert_chain(certfile=ruta_cert, keyfile=ruta_key)
     
     # ESTAS DOS LÍNEAS EXIGEN Y VALIDAN EL CERTIFICADO DEL SERVIDOR
     contexto.verify_mode = ssl.CERT_REQUIRED

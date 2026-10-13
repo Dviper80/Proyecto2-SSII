@@ -38,16 +38,34 @@ def enviar_peticion(sock, datos):
 
 def inicia_cliente():
 
-    id_dispositivo = input("¿Qué dispositivo eres? (1 o 2): ").strip()
-    ruta_cert = f"cliente{id_dispositivo}.crt"
-    ruta_key = f"cliente{id_dispositivo}.key"
+    print("\n--- CONFIGURACIÓN DE DISPOSITIVO BYOD ---")
+    print("1. Iniciar sesión (Ya tengo certificado en este equipo)")
+    print("2. Registrar nuevo dispositivo/usuario (No tengo certificado)")
+    modo = input("Elige una opción (1/2): ").strip()
+
+    ruta_cert = None
+    ruta_key = None
+
+    if modo == '1':
+        id_usuario = input("Introduce el nombre de tu usuario para cargar su certificado: ").strip()
+        ruta_cert = f"cliente_{id_usuario}.crt"
+        ruta_key = f"cliente_{id_usuario}.key"
+        
+        if not (os.path.exists(ruta_cert) and os.path.exists(ruta_key)):
+            print(f"[-] Error: No se encuentran los archivos {ruta_cert} y {ruta_key}. Regístrate primero.")
+            return
 
     try:
+        # Nota: Asegúrate de que tu gestor_tls soporta recibir None en las rutas
         contexto_tls = gestor_tls.obtener_contexto_cliente(ruta_cert, ruta_key, "ca.crt")
         cliente_socket_base = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cliente_socket = contexto_tls.wrap_socket(cliente_socket_base, server_hostname=HOST)
         cliente_socket.connect((HOST,PORT))
-        print(f"[+] Conectado de forma segura usando {ruta_cert}")
+        
+        if modo == '1':
+            print(f"[+] Conectado de forma segura (mTLS) usando {ruta_cert}")
+        else:
+            print("[+] Conectado de forma segura (TLS) para modo registro.")
 
     except Exception as e:
         print(f"[-] Error conectando con servidor banco: {e}")
@@ -80,18 +98,35 @@ def inicia_cliente():
                         print(f"\n[-] {res['mensaje']}. Inténtalo de nuevo.")
                 
                 elif opcion == '2':
+                    if modo == '1':
+                         print("[-] Reinicia el cliente en modo registro (opción 2) para crear nuevas cuentas.")
+                         continue
+                         
                     usuario = input("Nuevo usuario: ")
                     contraseña = input("Nueva contraseña: ")
                     
                     if len(usuario) < 3 or len(contraseña) < 3:
                         print("[-] El usuario y la contraseña deben tener al menos 3 caracteres.")
                     else:
-                        # NUEVO: El cliente solo envía los datos al servidor
                         req = {"accion": "registrar", "usuario": usuario, "password": contraseña}
                         res = enviar_peticion(cliente_socket, req)
 
                         if res.get("status") == "ok":
                             print(f"\n{res['mensaje']}")
+                            
+                            # --- NUEVO: GUARDAR LOS CERTIFICADOS ---
+                            if "certificado" in res and "clave_privada" in res:
+                                ruta_nuevo_cert = f"cliente_{usuario}.crt"
+                                ruta_nueva_key = f"cliente_{usuario}.key"
+                                
+                                with open(ruta_nuevo_cert, "w") as f:
+                                    f.write(res["certificado"])
+                                with open(ruta_nueva_key, "w") as f:
+                                    f.write(res["clave_privada"])
+                                    
+                                print(f"[+] Certificados BYOD guardados localmente: {ruta_nuevo_cert} y {ruta_nueva_key}")
+                                print("[!] Dispositivo emparejado con éxito. El programa se cerrará. Ábrelo de nuevo e inicia sesión.")
+                                break # Salimos para que el usuario vuelva a entrar cargando su nuevo certificado
                         else:
                             print(f"\n[-] {res['mensaje']}")
 
