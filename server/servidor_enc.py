@@ -10,6 +10,7 @@ import hashlib # NUEVO: Para hashear la contraseña
 import time
 import subprocess
 import os
+import bcrypt
 
 
 HOST = "0.0.0.0"
@@ -92,19 +93,28 @@ def procesar_peticion(pet, huella_cert):
     if accion == "registrar":
         usuario = pet.get("usuario")
         contraseña = pet.get("password")
-        pwd_hash = hashlib.sha256(contraseña.encode()).hexdigest()
+        pwd_hash = bcrypt.hashpw(contraseña.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
         try:
             
-            nombre_base = f"cliente_{usuario}"
             ruta_openssl = r"C:\Program Files\OpenSSL-Win64\bin\openssl.exe"
+            nombre_base = f"cliente_{usuario}"
 
-            # 1. Generar clave privada y CSR (Petición)
-            subprocess.run([ruta_openssl, "req", "-newkey", "rsa:4096", "-keyout", f"{nombre_base}.key", "-out", f"{nombre_base}.csr", "-nodes", "-subj", f"/CN={usuario}"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            # 2. Firmar con la CA del servidor
-            subprocess.run([ruta_openssl, "x509", "-req", "-in", f"{nombre_base}.csr", "-CA", "server/ca.crt", "-CAkey", "server/ca.key", "-CAcreateserial", "-out", f"{nombre_base}.crt", "-days", "365"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)         
-            # 3. Leer los archivos generados para enviarlos por el socket seguro
+            # 1. Generar clave privada y CSR (Petición) capturando el error
+            proceso1 = subprocess.run(
+                [ruta_openssl, "req", "-newkey", "rsa:4096", "-keyout", f"{nombre_base}.key", "-out", f"{nombre_base}.csr", "-nodes", "-subj", f"/CN={usuario}"], 
+                capture_output=True, text=True
+            )
+            if proceso1.returncode != 0:
+                return {"status": "error", "mensaje": f"Fallo OpenSSL (Paso 1): {proceso1.stderr}"}
+
+            # 2. Firmar con la CA del servidor capturando el error
+            proceso2 = subprocess.run(
+                [ruta_openssl, "x509", "-req", "-in", f"{nombre_base}.csr", "-CA", "server/ca.crt", "-CAkey", "server/ca.key", "-CAcreateserial", "-out", f"{nombre_base}.crt", "-days", "365"], 
+                capture_output=True, text=True
+            )
+            if proceso2.returncode != 0:
+                return {"status": "error", "mensaje": f"Fallo OpenSSL (Paso 2): {proceso2.stderr}"}            # 3. Leer los archivos generados para enviarlos por el socket seguro
             with open(f"{nombre_base}.key", "r") as f:
                 clave_privada = f.read()
             with open(f"{nombre_base}.crt", "r") as f:
