@@ -8,6 +8,8 @@ import seguridad # Importación del módulo criptográfico
 import mysql.connector
 import hashlib # NUEVO: Para hashear la contraseña
 import time
+import subprocess
+import os
 
 
 HOST = "0.0.0.0"
@@ -22,7 +24,7 @@ MAX_CONNECTIONS = 300
 semaforo = threading.Semaphore(MAX_CONNECTIONS)
 
 
-def procesar_peticion(pet):
+def procesar_peticion(pet, huella_cert):
     accion = pet.get("accion")
 
     if accion == "login":
@@ -38,6 +40,28 @@ def procesar_peticion(pet):
         if estado_usuario["bloqueado_hasta"] > tiempo_actual:
             tiempo_restante = int(estado_usuario["bloqueado_hasta"] - tiempo_actual)
             return {"status": "error", "mensaje": f"Cuenta bloqueada por seguridad. Inténtalo en {tiempo_restante} segundos."}
+
+        if not huella_cert:
+             return {"status": "error", "mensaje": "Denegado: Tu dispositivo no ha presentado un certificado de identidad."}
+
+        try:
+            conexion = banco.conectar()
+            cursor = conexion.cursor()
+            cursor.execute("SELECT cert_fingerprint FROM cuentas WHERE nombre = %s", (usuario,))
+            resultado = cursor.fetchone()
+            cursor.close()
+            conexion.close()
+            
+            # Comprobamos si el usuario existe y si la huella coincide
+            if not resultado:
+                return {"status": "error", "mensaje": "El usuario no existe."}
+                
+            if resultado[0] != huella_cert:
+                return {"status": "error", "mensaje": "Alerta de Seguridad: Dispositivo no reconocido. El certificado no coincide con el registrado."}
+                
+        except Exception as e:
+            return {"status": "error", "mensaje": f"Error verificando el dispositivo en la base de datos: {e}"}
+        # ---------------------------------------
 
         # 3. Intentar el login en la base de datos
         exito, saldo = banco.login(usuario, contraseña)
@@ -71,13 +95,39 @@ def procesar_peticion(pet):
         pwd_hash = hashlib.sha256(contraseña.encode()).hexdigest()
 
         try:
+            
+            nombre_base = f"cliente_{usuario}"
+            # 1. Generar clave privada y CSR (Petición)
+            subprocess.run(["openssl", "req", "-newkey", "rsa:4096", "-keyout", f"{nombre_base}.key", "-out", f"{nombre_base}.csr", "-nodes", "-subj", f"/CN={usuario}"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # 2. Firmar con la CA del servidor
+            subprocess.run(["openssl", "x509", "-req", "-in", f"{nombre_base}.csr", "-CA", "ca.crt", "-CAkey", "ca.key", "-CAcreateserial", "-out", f"{nombre_base}.crt", "-days", "365"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # 3. Leer los archivos generados para enviarlos por el socket seguro
+            with open(f"{nombre_base}.key", "r") as f:
+                clave_privada = f.read()
+            with open(f"{nombre_base}.crt", "r") as f:
+                certificado_pub = f.read()
+                
+            # Opcional: Borrar CSR residual
+            os.remove(f"{nombre_base}.csr")
+
+            cert_der = ssl.PEM_cert_to_DER_cert(certificado_pub)
+            fingerprint_nuevo = hashlib.sha256(cert_der).hexdigest()
+
+            # 3. Guardar en la base de datos INCLUYENDO LA HUELLA
             conexion = banco.conectar()
             cursor = conexion.cursor()
-            cursor.execute("INSERT INTO cuentas (nombre, password_hash, saldo) VALUES (%s, %s, 0.00)", (usuario, pwd_hash))
+            cursor.execute("INSERT INTO cuentas (nombre, password_hash, saldo, cert_fingerprint) VALUES (%s, %s, 0.00, %s)", (usuario, pwd_hash, fingerprint_nuevo))
             conexion.commit()
             cursor.close()
             conexion.close()
-            return {"status": "ok", "mensaje": f"[+] Cuenta '{usuario}' creada con éxito. Saldo inicial: 0.00€"}
+            
+            return {
+                "status": "ok", 
+                "mensaje": f"[+] Cuenta '{usuario}' creada con éxito.",
+                "certificado": certificado_pub,
+                "clave_privada": clave_privada
+            }
         except mysql.connector.Error as err:
             if err.errno == 1062:
                 return {"status": "error", "mensaje": f"El nombre de usuario '{usuario}' ya está en uso."}
@@ -134,7 +184,10 @@ def procesar_peticion(pet):
 
 def atiende_cliente(con, addr):
      print(f"[+] Cliente conectado desde {addr}")
+     certificado_binario = con.getpeercert(binary_form=True)
+     huella_cert = hashlib.sha256(certificado_binario).hexdigest() if certificado_binario else None
      token_actual = None
+     certificado_cliente = con.getpeercert()
      try:
           while True:
                # 1. Recibir bytes crudos con buffer ampliado (sin .decode("utf-8") directo)
@@ -148,9 +201,14 @@ def atiende_cliente(con, addr):
                except ValueError as e:
                    print(f"[!] Paquete rechazado de {addr}: {e}")
                    break # Desconecta al atacante si la firma falla
+               
+               if not certificado_cliente and peticion.get("accion") != "registrar":
+                   resp_err = {"status": "error", "mensaje": "Falta certificado. Solo puedes registrarte."}
+                   con.sendall(seguridad.cifrar_peticion(resp_err))
+                   break
 
                # 3. Procesar lógica bancaria
-               respuesta = procesar_peticion(peticion)
+               respuesta = procesar_peticion(peticion, huella_cert)
 
                if respuesta.get("status") == "ok" and "token" in respuesta:
                 token_actual = respuesta["token"]

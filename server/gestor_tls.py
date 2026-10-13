@@ -6,7 +6,7 @@ def obtener_contexto_servidor(ruta_cert, ruta_key, ruta_ca):
     contexto.load_cert_chain(certfile=ruta_cert, keyfile=ruta_key)
     
     # ESTAS DOS LÍNEAS EXIGEN Y VALIDAN EL CERTIFICADO DEL CLIENTE
-    contexto.verify_mode = ssl.CERT_REQUIRED
+    contexto.verify_mode = ssl.CERT_OPTIONAL
     contexto.load_verify_locations(cafile=ruta_ca)
     return contexto
 
