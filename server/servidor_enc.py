@@ -11,6 +11,7 @@ import time
 import subprocess
 import os
 import bcrypt
+import random 
 
 
 HOST = "0.0.0.0"
@@ -109,8 +110,9 @@ def procesar_peticion(pet, huella_cert):
                 return {"status": "error", "mensaje": f"Fallo OpenSSL (Paso 1): {proceso1.stderr}"}
 
             # 2. Firmar con la CA del servidor capturando el error
+            serial_aleatorio = str(random.getrandbits(64))
             proceso2 = subprocess.run(
-                [ruta_openssl, "x509", "-req", "-in", f"{nombre_base}.csr", "-CA", "server/ca.crt", "-CAkey", "server/ca.key", "-CAcreateserial", "-out", f"{nombre_base}.crt", "-days", "365"], 
+                [ruta_openssl, "x509", "-req", "-in", f"{nombre_base}.csr", "-CA", "server/ca.crt", "-CAkey", "server/ca.key", "-set_serial", serial_aleatorio, "-out", f"{nombre_base}.crt", "-days", "365"], 
                 capture_output=True, text=True
             )
             if proceso2.returncode != 0:

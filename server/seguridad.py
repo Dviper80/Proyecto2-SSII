@@ -61,8 +61,8 @@ def descifrar_peticion(datos_bytes):
     # print("\n--- DEBUG SERVIDOR ---")
     # print(f"1. Clave derivada (Hex): {clave_compartida.hex()[:15]}...")
     # print(f"2. Salt recibido: {paquete_recibido['salt']}")
-    print(f"3. MAC esperado: {mac_esperado}")
-    print(f"4. MAC recibido: {paquete_recibido['mac']}")
+    # print(f"3. MAC esperado: {mac_esperado}")
+    # print(f"4. MAC recibido: {paquete_recibido['mac']}")
     # print("----------------------\n")
     
     if not secrets.compare_digest(paquete_recibido["mac"], mac_esperado):
