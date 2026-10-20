@@ -4,71 +4,54 @@ import statistics
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import client
 import gestor_tls
 
 HOST = "10.200.238.140"
 PORT = 5000
-NUM_USUARIOS_CONCURRENTES = 298
-TIEMPO_MANTENER_CONECTADOS = 10  # Segundos que estarán TODOS conectados a la vez antes de la desconexión masiva
+NUM_USUARIOS_CONCURRENTES = 300
+TIEMPO_MANTENER_CONECTADOS = 10 
 
-# Barrera para retener los sockets activos hasta que los 298 completen el login
+# Solo necesitamos el certificado público de la CA para confiar en el servidor.
+# No requerimos claves privadas ni certificados de usuario.
+CA_CERT = "client/ca.crt"
+
 barrera_desconexion = threading.Barrier(NUM_USUARIOS_CONCURRENTES)
 
-def sesion_login(user_id):
+def sesion_conexion(user_id):
     ssl_sock = None
     try:
-        # 1. Escalonamiento suave (0.05s) para que el servidor acepte las conexiones sin tirar paquetes
+        # 1. Escalonamiento suave (0.05s) para no agotar los puertos efímeros locales
         time.sleep(user_id * 0.05)
 
-        usuario = f"user_{user_id}"
-        ruta_cert = f"cliente_{usuario}.crt"
-        ruta_key = f"cliente_{usuario}.key"
-        ruta_ca = "client/ca.crt"
-
-        contexto_ssl = gestor_tls.obtener_contexto_cliente(ruta_cert, ruta_key, ruta_ca)
+        # 2. Pasamos 'None' en lugar de rutas de certificado para simular un usuario NO registrado
+        contexto_ssl = gestor_tls.obtener_contexto_cliente(None, None, CA_CERT)
 
         raw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         raw_sock.settimeout(180.0)
 
         ssl_sock = contexto_ssl.wrap_socket(raw_sock, server_hostname=HOST)
 
-        peticion_dict = {
-            "accion": "login",
-            "usuario": usuario,
-            "password": "password123"
-        }
-
-        # --- INICIO CRONÓMETRO DE LOGIN ---
+        # --- INICIO CRONÓMETRO DE CONEXIÓN TLS ---
         inicio = time.perf_counter()
 
+        # Conectar (Handshake TLS 1.3 anónimo: el servidor se autentica, el cliente no)
         ssl_sock.connect((HOST, PORT))
-        respuesta = client.enviar_peticion(ssl_sock, peticion_dict)
 
         fin = time.perf_counter()
         latencia_real = (fin - inicio) * 1000
 
-        # 2. Mantener la conexión activa si el login fue exitoso
-        if respuesta and respuesta.get("status") == "ok":
-            try:
-                # El hilo se queda esperando aquí manteniendo el socket ABIERTO
-                # hasta que los 298 usuarios hayan terminado su login
-                barrera_desconexion.wait(timeout=300)
-            except (threading.BrokenBarrierError, threading.BarrierFull):
-                pass
+        # 3. Mantener la conexión activa esperando al resto de hilos
+        try:
+            barrera_desconexion.wait(timeout=300)
+        except (threading.BrokenBarrierError, threading.BarrierFull):
+            pass
 
-            # 3. Mantiene la sesión viva con las 298 conexiones abiertas simultáneamente
-            time.sleep(TIEMPO_MANTENER_CONECTADOS)
+        # 4. Mantiene la sesión viva con las 298 conexiones abiertas simultáneamente
+        time.sleep(TIEMPO_MANTENER_CONECTADOS)
 
-            # 4. DESCONEXIÓN MASIVA SIMULTÁNEA
-            ssl_sock.close()
-            return True, latencia_real
-        else:
-            if ssl_sock:
-                ssl_sock.close()
-            # Si un hilo falla, liberamos la barrera para evitar un bloqueo infinito
-            barrera_desconexion.abort()
-            return False, 0
+        # 5. DESCONEXIÓN MASIVA SIMULTÁNEA
+        ssl_sock.close()
+        return True, latencia_real
 
     except Exception:
         if ssl_sock:
@@ -82,11 +65,11 @@ def sesion_login(user_id):
             pass
         return False, 0
 
-def ejecutar_login_sostenido():
+def ejecutar_conexion_anonima_sostenida():
     print(f"\n==================================================")
-    print(f" PRUEBA RS3: {NUM_USUARIOS_CONCURRENTES} SESIONES ACTIVAS SIMULTÁNEAS")
+    print(f" PRUEBA DE CARGA: {NUM_USUARIOS_CONCURRENTES} CONEXIONES TLS ANÓNIMAS SIMULTÁNEAS")
     print(f"==================================================")
-    print(f"[*] Conectando usuarios progresivamente...")
+    print(f"[*] Conectando usuarios no registrados (Sin certificado cliente)...")
     print(f"[*] Todas las sesiones se mantendrán ABIERTAS hasta alcanzar {NUM_USUARIOS_CONCURRENTES} sockets activos.")
 
     latencias = []
@@ -97,7 +80,7 @@ def ejecutar_login_sostenido():
     tiempo_inicio_total = time.perf_counter()
 
     with ThreadPoolExecutor(max_workers=NUM_USUARIOS_CONCURRENTES) as executor:
-        futures = [executor.submit(sesion_login, i) for i in range(NUM_USUARIOS_CONCURRENTES)]
+        futures = [executor.submit(sesion_conexion, i) for i in range(NUM_USUARIOS_CONCURRENTES)]
 
         for future in as_completed(futures):
             exito, latencia = future.result()
@@ -118,12 +101,12 @@ def ejecutar_login_sostenido():
     latencia_media = statistics.mean(latencias) if latencias else 0
 
     print("\n\n--- RESULTADOS DEL BENCHMARK ---")
-    print(f" Sesiones Conectadas Con Éxito: {exitos}/{NUM_USUARIOS_CONCURRENTES}")
+    print(f" Sesiones Conectadas Con Éxito:  {exitos}/{NUM_USUARIOS_CONCURRENTES}")
     print(f" Conexiones Fallidas:            {fallos}/{NUM_USUARIOS_CONCURRENTES}")
     print(f" Tiempo Total del Test:          {tiempo_total_seg:.3f} s")
-    print(f" Throughput Medio:               {throughput:.2f} logins/s")
-    print(f" Latencia Media RTT (Login):     {latencia_media:.2f} ms")
+    print(f" Throughput Medio:               {throughput:.2f} conexiones/s")
+    print(f" Latencia Media RTT (Handshake): {latencia_media:.2f} ms")
     print(f"--------------------------------------------------\n")
 
 if __name__ == "__main__":
-    ejecutar_login_sostenido()
+    ejecutar_conexion_anonima_sostenida()
