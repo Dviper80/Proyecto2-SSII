@@ -6,16 +6,7 @@ import bcrypt
 DUMMY_HASH = None
 
 # Crear un pool global de conexiones (manejará las peticiones concurrentes de forma ordenada)
-banco_pool = mysql.connector.pooling.MySQLConnectionPool(
-    pool_name="pool_banco",
-    pool_size=32, # Permite 32 conexiones reales concurrentes, encolando el resto sin fallar
-    pool_reset_session=True,
-    host="127.0.0.1",
-    user="root",
-    password="root",
-    port=3307,
-    database="banco_db"
-)
+
 
 def conectar():
     """Establece la conexión a XAMPP (MySQL local)."""
