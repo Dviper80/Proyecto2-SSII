@@ -19,8 +19,8 @@ HOST = "10.200.238.140"
 PORT = 5000
 NUM_USUARIOS_CONCURRENTES = 298
 
-CERT_CLIENTE = "cliente_angel.crt"
-KEY_CLIENTE = "cliente_angel.key"
+CERT_CLIENTE = "cliente_carlos.crt"
+KEY_CLIENTE = "cliente_carlos.key"
 CA_CERT = "client/ca.crt"
 
 

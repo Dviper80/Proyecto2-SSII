@@ -14,7 +14,7 @@ def cifrar_peticion(diccionario_datos):
     mensaje_original = json.dumps(diccionario_datos)
     salt = secrets.token_bytes(16)
     
-    kdf = Argon2id(salt=salt, length=32, iterations=2, lanes=4, memory_cost=65536, ad=None, secret=None)
+    kdf = Argon2id(salt=salt, length=32, iterations=2, lanes=4, memory_cost=1024, ad=None, secret=None)
     clave_256_bits = kdf.derive(PASSWORD.encode('utf-8'))
     
     cifrador = Fernet(base64.urlsafe_b64encode(clave_256_bits))
@@ -52,7 +52,7 @@ def descifrar_peticion(datos_bytes):
     if nonce_recibido in nonces_procesados:
             raise ValueError("Ataque de repetición: Este paquete ya fue ejecutado.")
     
-    kdf_servidor = Argon2id(salt=salt_recibido, length=32, iterations=2, lanes=4, memory_cost=65536, ad=None, secret=None)
+    kdf_servidor = Argon2id(salt=salt_recibido, length=32, iterations=2, lanes=4, memory_cost=1024, ad=None, secret=None)
     clave_compartida = kdf_servidor.derive(PASSWORD.encode('utf-8'))
     
     datos_esperados = f"{paquete_recibido['mensaje_cifrado']}:{nonce_recibido}:{timestamp_recibido}".encode('utf-8')
