@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import gestor_tls
 
-HOST = "10.200.238.140"
+HOST = "192.168.1.90"
 PORT = 5000
 NUM_USUARIOS_CONCURRENTES = 300
 TIEMPO_MANTENER_CONECTADOS = 10 
